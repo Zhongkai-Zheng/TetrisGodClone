@@ -15,6 +15,11 @@ def init(data):
     # if a cell is empty, paint it blue
     data.emptyColor="white"
     data.score=0
+    data.aiscore=0
+    data.humanscore=0
+    data.rowscompleted=0
+    data.airows=0
+    data.humanrows=0
     #stands for Falling Piece Row and 
     #Falling Piece Column
     data.fpr=0
@@ -27,7 +32,7 @@ def init(data):
     data.ai=False
     #tells us which screen we are in
     #0 is menu, 1 is game, 2 is score, 3 is controls
-    data.screen=1
+    data.screen=0
     #the below variables are for the AI for testing test cases 
     data.testboard=copy.deepcopy(data.board)
     data.heights=[20, 20, 20, 20, 20, 20, 20, 20, 20, 20]
@@ -38,8 +43,12 @@ def init(data):
     data.vector=[data.bumpiness, data.holes, data.aggregateHeight, data.completerows]
     #got this vector from: 
     #https://codemyroad.wordpress.com/2013/04/14/tetris-ai-the-near-perfect-player/    
-    data.constantvector=[(-0.184),(-0.3566),(-0.51),0.7606]
+    data.constantvector=[(-184),(-356.6),(-510),760.6]
     data.testscore=0
+    data.intelligence=0
+    data.speed=0
+    data.savedboard=copy.deepcopy(data.board)
+    data.savedboard2=copy.deepcopy(data.board)
     #position and rotation and score of best piece
     data.besttestboard=None
     data.ai=False
@@ -55,8 +64,23 @@ def init(data):
     #below is the row of the ghost piece
     data.ghostrow=data.fpr
     #used for timing
+    #below are parameters of buttons, yet to be set
+    data.mmbutton=(0,0,0,0)
+    data.pabutton=(0,0,0,0)
+    data.resetpara=(0,0,0,0)
+    data.endpara=(0,0,0,0)
+    data.aibutton=(0,0,0,0)
+    data.pausepara=(0,0,0,0)
+    data.speedpara=(0,0,0)
+    data.intelpara=(0,0)
+    #size of the bar
+    data.barw, data.barmar, data.barh=0,0,0
+    #number of levels of speed and intelligence
+    data.speedlevels,data.intellevels=5,3
+    #to keep track of time
     data.time=0
-    data.paused=False
+    #to keep track of whether the game is paused or not
+    data.paused=True
     #Seven "standard" pieces (tetrominoes)
     iPiece = [
     [ True,  True,  True,  True]
@@ -96,6 +120,7 @@ def init(data):
                         oPiece, sPiece, tPiece, zPiece]
     data.pieceColors=["red", "yellow", "magenta", 
                     "pink", "cyan", "green", "orange"]
+#list of the next 6 pieces and their
     data.fallingPieces=[]
     data.fallingColors=[]
     data.knownpieces=6
@@ -127,20 +152,19 @@ def mousePressed(event, data):
 #cite: got this function from lab 6
 def keyPressed(event, data):
     # use event.char and event.keysym
-    if(event.keysym == "Left"): 
-        moveFallingPiece(data, 0, -1)
-    elif(event.keysym == "Right"):
-        moveFallingPiece(data, 0, 1)
-    elif(event.keysym == "Up"):
-        rotatePiece(data)
-    elif(event.keysym == "Down"):
-        moveFallingPiece(data, 1, 0)
-    if(event.keysym=="space"):
-        harddrop(data)
-    if(event.keysym=="h") and not data.held:
-        holdpiece(data)
-    if(event.keysym=="t"):
-        print(data.heights)
+    if(not data.paused):
+        if(event.keysym == "Left"): 
+            moveFallingPiece(data, 0, -1)
+        elif(event.keysym == "Right"):
+            moveFallingPiece(data, 0, 1)
+        elif(event.keysym == "Up"):
+            rotatePiece(data)
+        elif(event.keysym == "Down"):
+            moveFallingPiece(data, 1, 0)
+        if(event.keysym=="space"):
+            harddrop(data)
+        if(event.keysym=="h") and not data.held:
+            holdpiece(data)
     if(event.keysym=="p"):
         data.paused=not(data.paused)
 
@@ -152,42 +176,132 @@ def timerFired(data):
             moveFallingPiece(data, 1, 0)
             data.time=0
         if data.ai:
+            data.timerDelay=50//(3*data.speed+1)
             if data.newpiece: 
                 getBestTestCase(data)
             aiMove(data)
+        else: data.timerDelay=50
 
 #cite: got this function from lab 6, changed lines
 def redrawAll(canvas, data):
     # draw in canvas
+    if(data.screen==0):
+        drawhomescreen(canvas,data)
     if(data.screen==1):
-        drawGrid(canvas, data)
-        coverTopRows(canvas, data)
-        drawScore(canvas, data)
-        drawButtons(canvas, data)
-        drawNextUp(canvas, data)
-        drawhold(canvas, data)
-    elif(data.screen==2) : 
-        #stands for button width and button height, button x and button y
-        bw, bh=80, 20
-        bx, bx2=data.width//2-bw, data.width//2+bw
-        by, by2=data.height//2, data.height//2+2*bh
-        textwidth=(bx+bx2)//2
-        textheight=(by+by2)//2
-        textheight=data.height//2-bh-10
-        #stands for button text x and y 
-        btx, bty=(bx+bx2)//2, (by+by2)//2
+        drawGrid(canvas,data)
+        coverTopRows(canvas,data)
+        drawScore(canvas,data)
+        drawButtons(canvas,data)
+        drawNextUp(canvas,data)
+        drawhold(canvas,data)
+        drawControlSpeedandIntel(canvas,data)
+    if(data.screen==2):
+        drawlosescreen(canvas,data) 
+    if(data.screen==3):
+        drawhowtoplay(canvas,data)
 
-        canvas.create_text(textwidth, textheight, 
-                    text="You Lost! Your Score is " + str(data.score),
-                    anchor=CENTER, fill="blue", font="Times 12")
-        canvas.create_rectangle(bx, by, bx2, by2, fill="orange")
-        canvas.create_text(btx, bty, 
-                    text="PLAY AGAIN!",
-                    anchor=CENTER, fill="white")
-        canvas.create_rectangle(bx, by, bx2, by2, fill="orange")
-        canvas.create_text(btx, bty, 
+        #stands for button width and button height, button x and button y
+
+def drawlosescreen(canvas,data):
+#draws the lose screen
+    #position for the Game Over header
+    drawMainMenuandPlay(canvas,data)
+    textwidth=data.width//2
+    textheight=data.height//5
+    #stands for button text x and y 
+    canvas.create_text(textwidth, textheight, 
+                text="GAME OVER",
+                anchor=CENTER, fill="gray", font="Arial 40")
+
+    scoreheaders=["SCORE:", "LINES CLEARED:", "AI SCORE:",
+                    "HUMAN SCORE:","AI LINES CLEARED:","HUMAN LINES CLEARED:"]
+    headerx, headery=data.pabutton[0], textheight+80
+    scorex, scorey=data.mmbutton[2], headery
+    scores=[data.score,data.rowscompleted,data.aiscore,data.humanscore,
+            data.airows,data.humanrows]
+    for i in range(6):
+        canvas.create_text(headerx, headery+i*30, 
+                    text=scoreheaders[i],
+                    anchor=W, fill="gray")
+        canvas.create_text(scorex, scorey+i*30,
+                    text=scores[i],anchor=E,fill="gray")
+
+def drawMainMenuandPlay(canvas,data):
+    #stands for button width and button height
+    bw, bh=80, 20
+    #pab stands for play again button
+    pabx, pabx2=data.width//4-bw, data.width//4+bw
+    paby, paby2=4*data.height//5-bh, 4*data.height//5+bh
+    data.pabutton=(pabx,paby,pabx2,paby2)
+    pabtx, pabty=(pabx+pabx2)//2, (paby+paby2)//2
+    #stands for button text x and y 
+    #mmb stands for main menu button
+    mmbx, mmbx2=3*data.width//4-bw, 3*data.width//4+bw
+    mmby, mmby2=4*data.height//5-bh, 4*data.height//5+bh
+    data.mmbutton=(mmbx,mmby,mmbx2,mmby2)
+    mmbtx, mmbty=(mmbx+mmbx2)//2, (mmby+mmby2)//2
+    #stands for button text x and y 
+    canvas.create_rectangle(data.pabutton, fill="white", outline="gray")
+    canvas.create_text(pabtx, pabty, 
+                    text="PLAY",
+                    anchor=CENTER, fill="gray")
+    canvas.create_rectangle(data.mmbutton,fill="white",outline="gray")
+    canvas.create_text(mmbtx, mmbty, 
                     text="MAIN MENU",
-                    anchor=CENTER, fill="white")
+                    anchor=CENTER, fill="gray")
+
+#draws the home screen
+def drawhomescreen(canvas,data):
+    textx,texty=data.width//2,data.height//4
+    halfheight=data.height//2
+    canvas.create_text(textx,texty,text="TETRIS AI",
+                        anchor=CENTER,fill="lightblue",font="Arial 35")
+    bw, bh=80, 20
+    #sp stands for single player
+    spbx, spbx2=textx-bw, textx+bw
+    spby, spby2=halfheight-bh, halfheight+bh
+    data.spbutton=(spbx,spby,spbx2,spby2)
+    spbtx, spbty=(spbx+spbx2)//2, (spby+spby2)//2
+    canvas.create_rectangle(data.spbutton,fill="white", outline="gray")
+    canvas.create_text(spbtx, spbty, 
+                    text="PLAY",
+                    anchor=CENTER, fill="gray")
+    #htp stands for how to play
+    htpbx, htpbx2=textx-bw, textx+bw
+    htpby, htpby2=halfheight+3*bh, halfheight+5*bh
+    data.htpbutton=(htpbx,htpby,htpbx2,htpby2)
+    htpbtx, htpbty=(htpbx+htpbx2)//2, (htpby+htpby2)//2
+    canvas.create_rectangle(data.htpbutton,fill="white", outline="gray")
+    canvas.create_text(htpbtx, htpbty, 
+                    text="HOW TO PLAY",
+                    anchor=CENTER, fill="gray")
+
+
+
+def drawhowtoplay(canvas,data):
+    textx,texty=data.width//2,data.height//6
+    halfheight=data.height//2
+    #stands for bullet point
+    bpointstartx,bpointstarty=data.width//6,data.height//2-80
+    bpmargin=100
+    canvas.create_text(textx,texty,text="HOW TO PLAY",
+                        anchor=CENTER,fill="lightblue",font="Arial 35")
+    canvas.create_text(bpointstartx,bpointstarty,
+                        text="""For general rules of the game, check out this link:
+        http://www.wikihow.com/Play-Tetris""",
+                        anchor=W, fill="gray", font="Arial 15")
+
+    canvas.create_text(bpointstartx,bpointstarty+bpmargin,
+                        text="""For this game:
+    - Use the arrow keys to move, up key to rotate
+    - Press 'h' to hold
+    - Press the spacebar to harddrop
+    - There are no levels
+    - Clearing 1, 2, 3, 4 rows at a time gives
+      40, 100, 300, 1200 points respectively""",
+                        anchor=W, fill="gray", font="Arial 15")
+    drawMainMenuandPlay(canvas,data)
+
 
 #harddrops the current piece
 def harddrop(data):
@@ -216,15 +330,18 @@ def holdpiece(data):
 #gets the column and the rotation of the next piece
 #that minimizes score
 def getBestTestCase(data):
-    rotations=[]
-    piece=data.fallingPieces[0]
-    possibles=4
-    if piece==data.tetrisPieces[3]:possibles=1
-    elif (piece in [data.tetrisPieces[0],
-        data.tetrisPieces[6],data.tetrisPieces[4]]):possibles=2 
-    else: possibles==4
-    for i in range(possibles):
-        rotations.append(rotateTestPiece(data, piece, i))
+    if data.intelligence==0:
+        bestTestCase(data)
+    if data.intelligence==1:
+        bestTestCase2(data)
+    if data.intelligence==2:
+        bestTestCase3(data)
+    data.newpiece=False
+    for i in range(data.besttestboard[2]):
+        rotatePiece(data)
+
+def bestTestCase(data):
+    rotations=getRotations(data.fallingPieces[0],data)
     for i in range(len(rotations)):
         for c in range(0, data.cols):
             r=0
@@ -242,8 +359,105 @@ def getBestTestCase(data):
                     data.best=[data.bumpiness, data.holes, data.aggregateHeight, data.completerows]
             data.testboard=copy.deepcopy(data.board)
     data.newpiece=False
-    for i in range(data.besttestboard[2]):
-        rotatePiece(data)
+
+def bestTestCase2(data):
+    rotations=getRotations(data.fallingPieces[0],data)
+    medianboard=[]
+    rotations2=getRotations(data.fallingPieces[1],data)
+    for i in range(len(rotations)):
+        for c in range(0, data.cols):
+            r=0
+            if testPieceLegal(data, r, c, data.testboard, rotations[i]):
+                while testPieceLegal(data, r+1, c, data.testboard, rotations[i]): r+=1
+            else: continue
+            placeFallingTestPiece(data, rotations[i], r, c)
+            medianboard=copy.deepcopy(data.testboard)
+            for j in range(len(rotations2)):
+                for col in range(0, data.cols):
+                    row=0
+                    if testPieceLegal(data, row, col, data.testboard, rotations2[j]):
+                        while testPieceLegal(data, row+1, col, data.testboard, rotations2[j]): row+=1
+                    else: continue
+                    placeFallingTestPiece(data, rotations2[j], row, col)
+                    updateAll(data)
+                    if data.besttestboard==None:
+                        data.besttestboard=[r, c, i, data.testscore]
+                    else: 
+                        if data.besttestboard[3]<data.testscore:
+                            data.besttestboard=[r, c, i, data.testscore]
+                    data.testboard=copy.deepcopy(medianboard)
+            data.testboard=copy.deepcopy(data.board)
+    data.newpiece=False
+
+def bestTestCase3(data):
+    permutations=getPermutations(data,2)
+    permutations1=copy.deepcopy(permutations[0])
+    permutations2=copy.deepcopy(permutations[1])
+    for k in range(len(permutations2)):
+        rotations=getRotations(permutations2[k][0],data)
+        medianboard=[]
+        data.testboard=copy.deepcopy(data.board)
+        rotations2=getRotations(permutations2[k][1],data)
+        for i in range(len(rotations)):
+            for c in range(0, data.cols):
+                r=0
+                if testPieceLegal(data, r, c, data.testboard, rotations[i]):
+                    while testPieceLegal(data, r+1, c, data.testboard, rotations[i]): r+=1
+                else: continue
+                placeFallingTestPiece(data, rotations[i], r, c)
+                medianboard=copy.deepcopy(data.testboard)
+                for j in range(len(rotations2)):
+                    for col in range(0, data.cols):
+                        row=0
+                        if testPieceLegal(data, row, col, data.testboard, rotations2[j]):
+                            while testPieceLegal(data, row+1, col, data.testboard, rotations2[j]): row+=1
+                        else: continue
+                        placeFallingTestPiece(data, rotations2[j], row, col)
+                        updateAll(data)
+                        if data.besttestboard==None:
+                            data.besttestboard=[r, c, i, data.testscore,k]
+                        else: 
+                            if data.besttestboard[3]<data.testscore:
+                                data.besttestboard=[r, c, i, data.testscore,k]
+                        data.testboard=copy.deepcopy(medianboard)
+                data.testboard=copy.deepcopy(data.board)
+    if permutations1[data.besttestboard[4]][0]==1:
+        holdpiece(data)
+    data.newpiece=False
+
+def getPermutations(data, n):
+    #n is number of steps to consider
+    median, heldpiece=[], copy.deepcopy(data.heldpiece)
+    result1,result2=[],[]
+    #we use a list of 1s and 0s to represent each step being
+    #hold or not hold with 0 being not hold
+    result1=[[0,0],[1,0]]
+    for item in result1:
+    #the current indice we are dealing with
+        median=[]
+        current, heldpiece=0, copy.deepcopy(data.heldpiece)
+        for i in item:
+            if i==0: 
+                median.append(copy.deepcopy(data.fallingPieces[current]))
+                current+=1
+            else:
+                if heldpiece==[[False, False, False], [False, False, False]]:
+                    heldpiece=copy.deepcopy(data.fallingPieces[current])
+                    current+=1
+                    median.append(copy.deepcopy(data.fallingPieces[current]))
+                    current+=1
+                else:
+                    median.append(copy.deepcopy(heldpiece))
+                    heldpiece=data.fallingPieces[current]
+                    current+=1
+        result2.append(copy.deepcopy(median))
+    return(result1,result2)
+
+def getRotations(piece, data):
+    rotations=[]
+    for i in range(4):
+        rotations.append(rotateTestPiece(data, piece, i))
+    return rotations
 
 def aiMove(data):
 #moves the current piece to the best move place determined
@@ -425,7 +639,7 @@ def drawScore(canvas, data):
                     text="LINES: ",
                     anchor=NW, fill="grey", font="Arial 20")
     canvas.create_text(width2, height+rowsize, 
-                    text=data.score,
+                    text=data.rowscompleted,
                     anchor=NE, fill="grey", font="Arial 20")
 
 #draws all buttons on the screen
@@ -470,20 +684,67 @@ def drawButtons(canvas, data):
                     text="PAUSED", fill="white", font="Arial 15")
 
 
+def drawControlSpeedandIntel(canvas, data):
+    #the width of a cell of the bar, the distance from the header
+    #and the height of a cell of the bar
+    width, margin, height=120,20,15
+    data.barw, data.barmar, data.barh=width,margin,height
+    speedwidth,intelwidth=width//data.speedlevels, width//data.intellevels
+    speedy,speedx=data.aibutton[3]+margin,data.aibutton[0]-margin
+    data.speedpara=(speedy+margin,speedy+margin+height,speedx)
+    canvas.create_text(speedx, speedy, anchor=NW,
+                    text="SPEED", fill="grey", font="Arial 15")
+    intelx, intely=speedx, speedy+2*(margin+height)
+    data.intelpara=(intely+margin,intely+margin+height)
+    canvas.create_text(intelx, intely, anchor=NW,
+                    text="INTELLIGENCE", fill="grey", font="Arial 15")
+    for i in range(data.speedlevels):
+        canvas.create_rectangle(speedx+speedwidth*i,speedy+margin,
+                        speedx+speedwidth*(i+1),speedy+margin+height,fill="white",outline="lightgrey")
+        if i<=data.speed:
+             canvas.create_rectangle(speedx+speedwidth*i,speedy+margin,
+                        speedx+speedwidth*(i+1),speedy+margin+height,fill="lightgrey",outline="lightgrey")
+    for i in range(data.intellevels):
+        canvas.create_rectangle(intelx+intelwidth*i,intely+margin,
+                        intelx+intelwidth*(i+1),intely+margin+height,fill="white",outline="lightgrey")
+        if i<=data.intelligence:
+            canvas.create_rectangle(intelx+intelwidth*i,intely+margin,
+                        intelx+intelwidth*(i+1),intely+margin+height,fill="lightgrey",outline="lightgrey")
+
+def bareffects(data,x,y):
+    newx=x-data.speedpara[2]
+    if y>=data.speedpara[0] and y<=data.speedpara[1]:
+        if newx<=data.barw:data.speed=newx//(data.barw//data.speedlevels)
+    if y>=data.intelpara[0] and y<=data.intelpara[1]:
+        if newx<=data.barw:data.intelligence=newx//(data.barw//data.intellevels)
 
 #deals with pressing on a button
 def buttoneffects(data, x, y):
+    if data.screen==0:
+        if clickIn(x,y,data.spbutton): 
+            data.screen=1
+            reset(data)
+        if clickIn(x,y,data.htpbutton): data.screen=3
     if data.screen==1:
         if clickIn(x,y,data.resetpara): reset(data)
-        if clickIn(x,y,data.endpara): data.screen=2
+        if clickIn(x,y,data.endpara): endgame(data)
         if clickIn(x,y,data.aibutton): activateAI(data)
         if clickIn(x,y,data.pausepara): data.paused=not data.paused
     if data.screen==2:
-        return 42
+        if clickIn(x,y,data.mmbutton): data.screen=0
+        if clickIn(x,y,data.pabutton):
+            data.screen=1
+            reset(data)
     if data.screen==3:
-        return 42
-    if data.screen==0:
-        return 42
+        if clickIn(x,y,data.mmbutton): data.screen=0
+        if clickIn(x,y,data.pabutton):
+            data.screen=1
+            reset(data)
+    bareffects(data,x,y)
+
+def endgame(data):
+    data.screen=2
+    data.paused=True
 
 #returns True if the click was inside a certain button 
 def clickIn(x, y, button):
@@ -495,13 +756,20 @@ def clickIn(x, y, button):
 #resets the game, clears board, regenerates next up pieces
 #and clears the score and hold
 def reset(data):
-    data.game=True
+    data.paused=False
+    data.ai=False
+    data.held=False
     data.board=copy.deepcopy(make2dList(data.rows, data.cols, data.emptyColor))
     data.testboard=copy.deepcopy(data.board)
+    data.savedboard=copy.deepcopy(data.board)
     data.fallingPieces=[]
     data.fallingColors=[]
     data.score=0
-    data.completerows=0
+    data.aiscore=0
+    data.humanscore=0
+    data.rowscompleted=0
+    data.airows=0
+    data.humanrows=0
     data.heldpiece=[
     [ False, False, False ],
     [ False, False,  False]
@@ -511,7 +779,7 @@ def reset(data):
 #turns on AI
 def activateAI(data):
     data.ai=not data.ai
-    data.newpiece=True
+    if data.ai:data.newpiece=True
 
 #cite: got this function from lab 6
 def drawGrid(canvas, data):
@@ -649,12 +917,26 @@ def isRowComplete(data, row):
 #cite: got this function from lab 6
 def deleteCompleteRows(data):
 #deletes all rows that are completely filled
+    rowscompleted=0
+    score=0
     for row in range (0,len(data.board)):
         if isRowComplete(data, data.board[row]):
             data.board.pop(row)
             newRow=makeNewRow(data)
             data.board.insert(0, newRow)
-            data.score+=1
+            rowscompleted+=1
+    if rowscompleted==1: score=40
+    if rowscompleted==2: score=100
+    if rowscompleted==3: score=300
+    if rowscompleted==4: score=1200
+    data.score+=score
+    data.rowscompleted+=rowscompleted
+    if data.ai:
+        data.aiscore+=score
+        data.airows+=rowscompleted
+    else: 
+        data.humanscore+=score
+        data.humanrows+=rowscompleted
 
 def deleteCompleteTestRows(data):
 #deletes all rows that are completely filled
@@ -729,7 +1011,7 @@ def placeFallingPiece(data):
                 c=col+data.fpc
                 data.board[r][c]=data.fallingColors[0]
     deleteCompleteRows(data)
-    if(hasLost(data)): data.game=False
+    if(hasLost(data)): endgame(data)
     data.held=False
     data.besttestboard=None
 
@@ -759,7 +1041,7 @@ def fallingPieceFell(data, piece):
 
 #cite: got this function from lab 6
 def hasLost(data):
-    for col in data.board[0]:
+    for col in data.board[2]:
         if col!=data.emptyColor:
             return True
     return False
